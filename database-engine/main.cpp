@@ -12,22 +12,22 @@ const string metadata = "metadata.txt";
 const string tempfile = "temp-file.txt";
 
 
-//  TODO : use metadata.txt for this
 int getLastId(){
-    ifstream inFile(filename);
-    int lineCount = 0; 
+    ifstream inFile(metadata);
+    int lastId;
     string line;
 
     if(inFile.is_open()){  
         while(getline(inFile , line)){
-            lineCount++;
+            json j = json::parse(line);
+            lastId = j["id"];  
         }
     }else {
         cerr << "Error opening file for reading!" << endl;
     };
     inFile.close();
 
-    return lineCount;
+    return lastId;
 }
 
 void copyDatabase(){
@@ -51,8 +51,9 @@ void copyDatabase(){
 void writeFile(string data){
     int id = getLastId() + 1;
 
+    ofstream metaFile(metadata);
     ofstream outFile(filename, ios::app);
-    if(outFile.is_open()){
+    if(outFile.is_open() && metaFile.is_open()){
         // creating json format 
         // string jsonLine = "{\"id\": " + to_string(id) + ", \"data\": \"" + data + "\", \"timestamp\": " + to_string(time(0)) + "}";
         // outFile << jsonLine << endl;
@@ -62,6 +63,14 @@ void writeFile(string data){
             {"timestamp", time(0)}
         };
         outFile << entry.dump() << endl;
+
+        // update metadata
+        json meta = {
+            {"id", id},
+        };
+        metaFile << meta.dump() << endl;
+
+        metaFile.close();
         outFile.close();
     }else {
         cerr << "Error opening file for writing!" << endl;
@@ -116,7 +125,6 @@ void updateEntry(int targetId, string newData){
 
 
     //write to the temp-file
-
     ofstream outFile(tempfile);
 
     if(outFile.is_open()){
@@ -137,7 +145,6 @@ void updateEntry(int targetId, string newData){
         fs::remove(filename);
 
         fs::rename(tempfile , filename);
-
         cout << "Update Complete!" << endl;
 
     }catch(const fs::filesystem_error& e){
