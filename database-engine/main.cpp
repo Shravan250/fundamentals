@@ -4,12 +4,34 @@
 using namespace std;
 
 const string filename = "database.txt";
+const string metadata = "metadata.txt";
+
+//  TODO : use metadata.txt for this
+int getLastId(){
+    ifstream inFile(filename);
+    int lineCount = 0; 
+    string line;
+
+    if(inFile.is_open()){  
+        while(getline(inFile , line)){
+            lineCount++;
+        }
+    }else {
+        cerr << "Error opening file for reading!" << endl;
+    };
+    inFile.close();
+
+    return lineCount;
+}
 
 void writeFile(string data){
+    int id = getLastId() + 1;
+
     ofstream outFile(filename, ios::app);
     if(outFile.is_open()){
         // creating json format 
-        string jsonLine = "{\"data\": \"" + data + "\", \"timestamp\": " + to_string(time(0)) + "}";
+        string jsonLine = "{\"id\": " + to_string(id) + ", \"data\": \"" + data + "\", \"timestamp\": " + to_string(time(0)) + "}";
+        
         outFile << jsonLine << endl;
         outFile.close();
     }else {
@@ -30,6 +52,7 @@ void readFile(){
         cerr << "Error opening file for reading!" << endl;
     };
 };
+
 
 int main() {
 

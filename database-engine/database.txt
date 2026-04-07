@@ -1,2 +1,3 @@
 {"data": "Hi!", "timestamp": 1775550664}
 {"data": "Hello! from the file.", "timestamp": 1775550677}
+{"id": 3, "data": "HoHoHo:)", "timestamp": 1775553276}
