@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+jspm_packages/
+web_modules/
+
+# Logs and Debug
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.nyc_output
+
+# Build and Coverage
+dist/
+build/
+coverage/
+.next/
+.nuxt/
+
+# Environment
+.env
+.env.local
+*.tsbuildinfo
+
+# OS
+.DS_Store
