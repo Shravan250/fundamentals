@@ -8,7 +8,9 @@ const string filename = "database.txt";
 void writeFile(string data){
     ofstream outFile(filename, ios::app);
     if(outFile.is_open()){
-        outFile << data <<"\n";
+        // creating json format 
+        string jsonLine = "{\"data\": \"" + data + "\", \"timestamp\": " + to_string(time(0)) + "}";
+        outFile << jsonLine << endl;
         outFile.close();
     }else {
         cerr << "Error opening file for writing!" << endl;

@@ -1,2 +1,2 @@
-Hi!
-Hello! from the file.
+{"data": "Hi!", "timestamp": 1775550664}
+{"data": "Hello! from the file.", "timestamp": 1775550677}
