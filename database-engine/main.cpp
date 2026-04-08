@@ -70,6 +70,7 @@ void readDatabaseBinary(){
 ;}
 
 void updateIndex(){
+    readDatabaseBinary();
     ofstream outFile(indexfile);
 
     if(outFile.is_open()){
