@@ -89,12 +89,33 @@ void updateIndex(){
     };
 };
 
+void appendIndex(int id, streampos pos){
+    ofstream outFile(indexfile, ios::app);
+
+    if(outFile.is_open()){
+        json entry = {
+            {"id", id},
+            {"startpos",static_cast<long long>(pos)},
+        };
+        outFile << entry.dump() << endl;
+        
+        cout << "Index updated!!" << endl;
+        outFile.close();
+    }else {
+        cerr << "Error opening file for writing!" << endl;
+    };
+}
+
 void writeFile(string data){
     int id = getLastId() + 1;
 
     ofstream metaFile(metadata);
-    ofstream outFile(database, ios::app);
+    ofstream outFile(database, ios::app | ios::binary);
     if(outFile.is_open() && metaFile.is_open()){
+        
+        // get the eof pos before write
+        streampos startPos = outFile.tellp(); 
+
         // creating json format 
         // string jsonLine = "{\"id\": " + to_string(id) + ", \"data\": \"" + data + "\", \"timestamp\": " + to_string(time(0)) + "}";
         // outFile << jsonLine << endl;
@@ -110,6 +131,9 @@ void writeFile(string data){
             {"id", id},
         };
         metaFile << meta.dump() << endl;
+ 
+        // appendIndex
+        appendIndex(id, startPos);
 
         metaFile.close();
         outFile.close();
@@ -133,6 +157,7 @@ void readFile(){
 };
 
 // TODO : refactor the function
+// TODO : update to use slot method to better integrate with indexing
 void updateEntry(int targetId, string newData){
     copyDatabase();
 
@@ -192,7 +217,6 @@ void updateEntry(int targetId, string newData){
         cout << "File error: " << e.what() << endl;
     }
 };
-
 
 int main() {
 
