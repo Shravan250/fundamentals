@@ -7,10 +7,11 @@ using namespace std;
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
-const string filename = "database.txt";
+const string database = "database.txt";
 const string metadata = "metadata.txt";
 const string tempfile = "temp-file.txt";
-
+const string indexfile = "index.txt";
+map<int, streampos> indexmap;
 
 int getLastId(){
     ifstream inFile(metadata);
@@ -28,10 +29,10 @@ int getLastId(){
     inFile.close();
 
     return lastId;
-}
+};
 
 void copyDatabase(){
-    ifstream inFile(filename);
+    ifstream inFile(database);
     ofstream outFile(tempfile);
     string line;
     
@@ -45,14 +46,53 @@ void copyDatabase(){
     }else {
         cerr << "Error copying the database!" << endl;
     };
+};
 
-}
+void readDatabaseBinary(){
+    ifstream inFile(database, ios::binary);
+    string line;
+    int idCount = 1;
+
+    if(inFile.is_open()){
+        
+        while(true){
+            streampos pos = inFile.tellg();
+
+            if(!getline(inFile, line)) break;
+
+            indexmap[idCount] = pos;
+            idCount++;
+        }
+        inFile.close();
+    }else {
+        cerr << "Error opening file for reading!" << endl;
+    };
+;}
+
+void updateIndex(){
+    ofstream outFile(indexfile);
+
+    if(outFile.is_open()){
+        for (const auto& [id, pos] : indexmap){
+            json entry = {
+                {"id", id},
+                {"startpos",static_cast<long long>(pos)},
+            };
+            outFile << entry.dump() << endl;
+        }
+        
+        cout << "Index updated!!" << endl;
+        outFile.close();
+    }else {
+        cerr << "Error opening file for writing!" << endl;
+    };
+};
 
 void writeFile(string data){
     int id = getLastId() + 1;
 
     ofstream metaFile(metadata);
-    ofstream outFile(filename, ios::app);
+    ofstream outFile(database, ios::app);
     if(outFile.is_open() && metaFile.is_open()){
         // creating json format 
         // string jsonLine = "{\"id\": " + to_string(id) + ", \"data\": \"" + data + "\", \"timestamp\": " + to_string(time(0)) + "}";
@@ -78,7 +118,7 @@ void writeFile(string data){
 };
 
 void readFile(){
-    ifstream inFile(filename);
+    ifstream inFile(database);
     string line;
 
     if(inFile.is_open()){
@@ -142,15 +182,15 @@ void updateEntry(int targetId, string newData){
 
     //delete original database and make temp-file new original
     try {
-        fs::remove(filename);
+        fs::remove(database);
 
-        fs::rename(tempfile , filename);
+        fs::rename(tempfile , database);
         cout << "Update Complete!" << endl;
 
     }catch(const fs::filesystem_error& e){
         cout << "File error: " << e.what() << endl;
     }
-}
+};
 
 
 int main() {
@@ -158,7 +198,7 @@ int main() {
     int choice;
 
     while (true) {
-        cout << "\n1. Write to file\n2. Read from file\n3. Update entry\n4. Exit\nChoice: ";
+        cout << "\n1. Write to file\n2. Read from file\n3. Update entry\n4. Update index\n5. Exit\nChoice: ";
         if (!(cin >> choice)) break;
         cin.ignore();
 
@@ -184,10 +224,12 @@ int main() {
 
             updateEntry(id, newData);
         } else if (choice == 4) {
+            updateIndex();
+        }else if (choice == 5) {
             break;
         }
     }
 
     
     return 0;
-}
+};
