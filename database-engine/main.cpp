@@ -31,22 +31,6 @@ int getLastId() {
   return lastId;
 };
 
-void copyDatabase() {
-  ifstream inFile(database);
-  ofstream outFile(tempfile);
-  string line;
-
-  if (outFile.is_open() && inFile.is_open()) {
-    while (getline(inFile, line)) {
-      outFile << line << endl;
-    }
-    inFile.close();
-    outFile.close();
-  } else {
-    cerr << "Error copying the database!" << endl;
-  };
-};
-
 void loadIndexMap() {
   ifstream inFile(database, ios::binary);
   string line;
@@ -61,7 +45,7 @@ void loadIndexMap() {
 
       json j = json::parse(line);
       int actualId = j["id"];
-
+        
       indexmap[actualId] = pos;
     }
     inFile.close();
@@ -91,10 +75,6 @@ void updateIndex() {
   };
 };
 
-/*
-  BUG :for later i am not updating new index to indexmap so in same running
-  program i wont be able to read that id by readById()
-*/
 void appendIndex(int id, streampos pos) {
   ofstream outFile(indexfile, ios::app);
 
@@ -104,6 +84,8 @@ void appendIndex(int id, streampos pos) {
         {"startpos", static_cast<long long>(pos)},
     };
     outFile << entry.dump() << endl;
+    
+    indexmap[id] = pos;
 
     cout << "Index updated!!" << endl;
     outFile.close();
@@ -176,66 +158,61 @@ void readById(int id) {
   }
 }
 
-// TODO : refactor the function
 // TODO : update to use slot method to better integrate with indexing
+// currently using 'stale' method
 void updateEntry(int targetId, string newData) {
-  copyDatabase();
+    
+    auto it = indexmap.find(targetId);
 
-  ifstream inFile(tempfile);
-  string line;
-  vector<json> entries;
-  bool found = false;
-
-  if (inFile.is_open()) {
-    while (getline(inFile, line)) {
-      if (line.empty())
-        continue;
-
-      // updating the entry
-      json j = json::parse(line);
-      if (j["id"] == targetId) {
-        j["data"] = newData;
-        j["timestamp"] = time(0);
-        found = true;
-      }
-      entries.push_back(j);
+    if (it == indexmap.end()) {
+        cout << "ID not found!" << endl;
+        return;
     }
-    inFile.close();
-  } else {
-    cerr << "Error opening file for reading!" << endl;
-  };
 
-  if (!found) {
-    cout << "ID not found!" << endl;
-    return;
-  }
-
-  // write to the temp-file
-  ofstream outFile(tempfile);
-
+  ofstream outFile(database, ios::app | ios::binary);
   if (outFile.is_open()) {
-    // creating json format
-    for (const auto &entry : entries) {
-      outFile << entry.dump() << "\n";
-    }
+
+    // get the eof pos before write
+    streampos startPos = outFile.tellp();
+
+    json entry = {{"id", targetId}, {"data", newData}, {"timestamp", time(0)}};
+    outFile << entry.dump() << endl;
+
+    // appendIndex
+    appendIndex(targetId, startPos);
+
     outFile.close();
   } else {
-    cerr << "Error opening temp-file for writing!" << endl;
+    cerr << "Error opening file for writing!" << endl;
   };
+
+
+  // // write to the temp-file
+  // ofstream outFile(tempfile);
+
+  // if (outFile.is_open()) {
+  //   // creating json format
+  //   for (const auto &entry : entries) {
+  //     outFile << entry.dump() << "\n";
+  //   }
+  //   outFile.close();
+  // } else {
+  //   cerr << "Error opening temp-file for writing!" << endl;
+  // };
 
   // cout << "SIMULATING CRASH NOW..." << endl;
   // exit(0); // The program stops here
 
   // delete original database and make temp-file new original
-  try {
-    fs::remove(database);
+  // try {
+  //   fs::remove(database);
 
-    fs::rename(tempfile, database);
-    cout << "Update Complete!" << endl;
+  //   fs::rename(tempfile, database);
+  //   cout << "Update Complete!" << endl;
 
-  } catch (const fs::filesystem_error &e) {
-    cout << "File error: " << e.what() << endl;
-  }
+  // } catch (const fs::filesystem_error &e) {
+  //   cout << "File error: " << e.what() << endl;
+  // }
 };
 
 int main() {
