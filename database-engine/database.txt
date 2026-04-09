@@ -1,5 +1,5 @@
-{"data":"Hi!","id":null,"timestamp":1775550664}
-{"data":"Hello! from the file.","id":null,"timestamp":1775550677}
+{"data":"Hi!","id":1,"timestamp":1775550664}
+{"data":"Hello! from the file.","id":2,"timestamp":1775550677}
 {"data":"HoHoHo;)","id":3,"timestamp":1775567012}
 {"data":"Hold up.","id":4,"timestamp":1775583108}
 {"data":"hehehe:))","id":5,"timestamp":1775583604}
@@ -108,3 +108,4 @@
 {"data":"Test2","id":108,"timestamp":1775653675}
 {"data":"Test3","id":109,"timestamp":1775653968}
 {"data":"Test4","id":110,"timestamp":1775654060}
+{"data":"hi","id":111,"timestamp":1775722027}

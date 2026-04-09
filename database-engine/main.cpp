@@ -1,8 +1,8 @@
-#include<iostream>
-#include<fstream>
-#include<string>
-#include <nlohmann/json.hpp>
 #include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <nlohmann/json.hpp>
+#include <string>
 using namespace std;
 using json = nlohmann::json;
 namespace fs = std::filesystem;
@@ -11,250 +11,280 @@ const string database = "database.txt";
 const string metadata = "metadata.txt";
 const string tempfile = "temp-file.txt";
 const string indexfile = "index.txt";
-map<int, streampos> indexmap;
+unordered_map<int, streampos> indexmap;
 
-int getLastId(){
-    ifstream inFile(metadata);
-    int lastId;
-    string line;
+int getLastId() {
+  ifstream inFile(metadata);
+  int lastId;
+  string line;
 
-    if(inFile.is_open()){  
-        while(getline(inFile , line)){
-            json j = json::parse(line);
-            lastId = j["id"];  
-        }
-    }else {
-        cerr << "Error opening file for reading!" << endl;
-    };
+  if (inFile.is_open()) {
+    while (getline(inFile, line)) {
+      json j = json::parse(line);
+      lastId = j["id"];
+    }
+  } else {
+    cerr << "Error opening file for reading!" << endl;
+  };
+  inFile.close();
+
+  return lastId;
+};
+
+void copyDatabase() {
+  ifstream inFile(database);
+  ofstream outFile(tempfile);
+  string line;
+
+  if (outFile.is_open() && inFile.is_open()) {
+    while (getline(inFile, line)) {
+      outFile << line << endl;
+    }
     inFile.close();
-
-    return lastId;
+    outFile.close();
+  } else {
+    cerr << "Error copying the database!" << endl;
+  };
 };
 
-void copyDatabase(){
-    ifstream inFile(database);
-    ofstream outFile(tempfile);
-    string line;
-    
+void loadIndexMap() {
+  ifstream inFile(database, ios::binary);
+  string line;
 
-    if(outFile.is_open() && inFile.is_open()){
-        while(getline(inFile , line)){
-            outFile << line << endl;
-        }
-        inFile.close();
-        outFile.close();
-    }else {
-        cerr << "Error copying the database!" << endl;
-    };
-};
+  if (inFile.is_open()) {
 
-void readDatabaseBinary(){
-    ifstream inFile(database, ios::binary);
-    string line;
-    int idCount = 1;
+    while (true) {
+      streampos pos = inFile.tellg();
 
-    if(inFile.is_open()){
-        
-        while(true){
-            streampos pos = inFile.tellg();
+      if (!getline(inFile, line))
+        break;
 
-            if(!getline(inFile, line)) break;
+      json j = json::parse(line);
+      int actualId = j["id"];
 
-            indexmap[idCount] = pos;
-            idCount++;
-        }
-        inFile.close();
-    }else {
-        cerr << "Error opening file for reading!" << endl;
-    };
-;}
-
-void updateIndex(){
-    readDatabaseBinary();
-    ofstream outFile(indexfile);
-
-    if(outFile.is_open()){
-        for (const auto& [id, pos] : indexmap){
-            json entry = {
-                {"id", id},
-                {"startpos",static_cast<long long>(pos)},
-            };
-            outFile << entry.dump() << endl;
-        }
-        
-        cout << "Index updated!!" << endl;
-        outFile.close();
-    }else {
-        cerr << "Error opening file for writing!" << endl;
-    };
-};
-
-void appendIndex(int id, streampos pos){
-    ofstream outFile(indexfile, ios::app);
-
-    if(outFile.is_open()){
-        json entry = {
-            {"id", id},
-            {"startpos",static_cast<long long>(pos)},
-        };
-        outFile << entry.dump() << endl;
-        
-        cout << "Index updated!!" << endl;
-        outFile.close();
-    }else {
-        cerr << "Error opening file for writing!" << endl;
-    };
+      indexmap[actualId] = pos;
+    }
+    inFile.close();
+  } else {
+    cerr << "Error opening file for reading!" << endl;
+  };
+  ;
 }
 
-void writeFile(string data){
-    int id = getLastId() + 1;
+void updateIndex() {
+  loadIndexMap();
+  ofstream outFile(indexfile);
 
-    ofstream metaFile(metadata);
-    ofstream outFile(database, ios::app | ios::binary);
-    if(outFile.is_open() && metaFile.is_open()){
-        
-        // get the eof pos before write
-        streampos startPos = outFile.tellp(); 
+  if (outFile.is_open()) {
+    for (const auto &[id, pos] : indexmap) {
+      json entry = {
+          {"id", id},
+          {"startpos", static_cast<long long>(pos)},
+      };
+      outFile << entry.dump() << endl;
+    }
 
-        // creating json format 
-        // string jsonLine = "{\"id\": " + to_string(id) + ", \"data\": \"" + data + "\", \"timestamp\": " + to_string(time(0)) + "}";
-        // outFile << jsonLine << endl;
-        json entry = {
-            {"id", id},
-            {"data", data},
-            {"timestamp", time(0)}
-        };
-        outFile << entry.dump() << endl;
-
-        // update metadata
-        json meta = {
-            {"id", id},
-        };
-        metaFile << meta.dump() << endl;
- 
-        // appendIndex
-        appendIndex(id, startPos);
-
-        metaFile.close();
-        outFile.close();
-    }else {
-        cerr << "Error opening file for writing!" << endl;
-    };
+    cout << "Index updated!!" << endl;
+    outFile.close();
+  } else {
+    cerr << "Error opening file for writing!" << endl;
+  };
 };
 
-void readFile(){
-    ifstream inFile(database);
-    string line;
+/*
+  BUG :for later i am not updating new index to indexmap so in same running
+  program i wont be able to read that id by readById()
+*/
+void appendIndex(int id, streampos pos) {
+  ofstream outFile(indexfile, ios::app);
 
-    if(inFile.is_open()){
-        while(getline(inFile , line)){
-            cout << line << endl;
-        }
-        inFile.close();
-    }else {
-        cerr << "Database is empty or doesn't exist." << endl;
+  if (outFile.is_open()) {
+    json entry = {
+        {"id", id},
+        {"startpos", static_cast<long long>(pos)},
     };
+    outFile << entry.dump() << endl;
+
+    cout << "Index updated!!" << endl;
+    outFile.close();
+  } else {
+    cerr << "Error opening file for writing!" << endl;
+  };
+}
+
+void writeFile(string data) {
+  int id = getLastId() + 1;
+
+  ofstream metaFile(metadata);
+  ofstream outFile(database, ios::app | ios::binary);
+  if (outFile.is_open() && metaFile.is_open()) {
+
+    // get the eof pos before write
+    streampos startPos = outFile.tellp();
+
+    // creating json format
+    // string jsonLine = "{\"id\": " + to_string(id) + ", \"data\": \"" + data +
+    // "\", \"timestamp\": " + to_string(time(0)) + "}"; outFile << jsonLine <<
+    // endl;
+    json entry = {{"id", id}, {"data", data}, {"timestamp", time(0)}};
+    outFile << entry.dump() << endl;
+
+    // update metadata
+    json meta = {
+        {"id", id},
+    };
+    metaFile << meta.dump() << endl;
+
+    // appendIndex
+    appendIndex(id, startPos);
+
+    metaFile.close();
+    outFile.close();
+  } else {
+    cerr << "Error opening file for writing!" << endl;
+  };
 };
+
+void readFile() {
+  ifstream inFile(database);
+  string line;
+
+  if (inFile.is_open()) {
+    while (getline(inFile, line)) {
+      cout << line << endl;
+    }
+    inFile.close();
+  } else {
+    cerr << "Database is empty or doesn't exist." << endl;
+  };
+};
+
+void readById(int id) {
+  auto it = indexmap.find(id);
+  string line;
+
+  if (it != indexmap.end()) {
+    streampos address = it->second;
+    ifstream inFile(database, ios::binary);
+
+    inFile.seekg(address);
+    getline(inFile, line);
+
+    cout << "Found Record: " << line << endl;
+  } else{
+    cout << "Record Not Found!" << endl;
+  }
+}
 
 // TODO : refactor the function
 // TODO : update to use slot method to better integrate with indexing
-void updateEntry(int targetId, string newData){
-    copyDatabase();
+void updateEntry(int targetId, string newData) {
+  copyDatabase();
 
-    ifstream inFile(tempfile);
-    string line;
-    vector<json> entries;
-    bool found = false;
+  ifstream inFile(tempfile);
+  string line;
+  vector<json> entries;
+  bool found = false;
 
-    if(inFile.is_open()){
-        while(getline(inFile , line)){
-            if (line.empty()) continue;
-            
-            // updating the entry
-            json j = json::parse(line);
-            if (j["id"] == targetId) {
-                j["data"] = newData;
-                j["timestamp"] = time(0);
-                found = true;
-            }
-            entries.push_back(j);       
-        }
-        inFile.close();
-    }else {
-        cerr << "Error opening file for reading!" << endl;
-    };
+  if (inFile.is_open()) {
+    while (getline(inFile, line)) {
+      if (line.empty())
+        continue;
 
-    if (!found) {
-        cout << "ID not found!" << endl;
-        return;
+      // updating the entry
+      json j = json::parse(line);
+      if (j["id"] == targetId) {
+        j["data"] = newData;
+        j["timestamp"] = time(0);
+        found = true;
+      }
+      entries.push_back(j);
     }
+    inFile.close();
+  } else {
+    cerr << "Error opening file for reading!" << endl;
+  };
 
+  if (!found) {
+    cout << "ID not found!" << endl;
+    return;
+  }
 
-    //write to the temp-file
-    ofstream outFile(tempfile);
+  // write to the temp-file
+  ofstream outFile(tempfile);
 
-    if(outFile.is_open()){
-        // creating json format 
-        for (const auto& entry : entries) {
-            outFile << entry.dump() << "\n";
-        }      
-        outFile.close();
-    }else {
-        cerr << "Error opening temp-file for writing!" << endl;
-    };
-
-    // cout << "SIMULATING CRASH NOW..." << endl;
-    // exit(0); // The program stops here
-
-    //delete original database and make temp-file new original
-    try {
-        fs::remove(database);
-
-        fs::rename(tempfile , database);
-        cout << "Update Complete!" << endl;
-
-    }catch(const fs::filesystem_error& e){
-        cout << "File error: " << e.what() << endl;
+  if (outFile.is_open()) {
+    // creating json format
+    for (const auto &entry : entries) {
+      outFile << entry.dump() << "\n";
     }
+    outFile.close();
+  } else {
+    cerr << "Error opening temp-file for writing!" << endl;
+  };
+
+  // cout << "SIMULATING CRASH NOW..." << endl;
+  // exit(0); // The program stops here
+
+  // delete original database and make temp-file new original
+  try {
+    fs::remove(database);
+
+    fs::rename(tempfile, database);
+    cout << "Update Complete!" << endl;
+
+  } catch (const fs::filesystem_error &e) {
+    cout << "File error: " << e.what() << endl;
+  }
 };
 
 int main() {
 
-    int choice;
+  int choice;
+  loadIndexMap();
 
-    while (true) {
-        cout << "\n1. Write to file\n2. Read from file\n3. Update entry\n4. Update index\n5. Exit\nChoice: ";
-        if (!(cin >> choice)) break;
-        cin.ignore();
+  while (true) {
+    cout << "\n1. Write to file\n2. Read from file\n3. Update entry\n4. Update "
+            "index\n5. Read by ID\n6. Exit\nChoice: ";
+    if (!(cin >> choice))
+      break;
+    cin.ignore();
 
-        if (choice == 1) {
-            string userInput;
+    if (choice == 1) {
+      string userInput;
 
-            cout << "Enter text: ";
-            getline(cin, userInput);
+      cout << "Enter text: ";
+      getline(cin, userInput);
 
-            writeFile(userInput);
-        } else if (choice == 2) {
-            readFile();
-        } else if (choice == 3) {
-            int id;
-            string newData;
+      writeFile(userInput);
+    } else if (choice == 2) {
+      readFile();
+    } else if (choice == 3) {
+      int id;
+      string newData;
 
-            cout << "Enter ID to update: ";
-            cin >> id;
-            cin.ignore();
+      cout << "Enter ID to update: ";
+      cin >> id;
+      cin.ignore();
 
-            cout << "Enter new data: ";
-            getline(cin, newData);
+      cout << "Enter new data: ";
+      getline(cin, newData);
 
-            updateEntry(id, newData);
-        } else if (choice == 4) {
-            updateIndex();
-        }else if (choice == 5) {
-            break;
-        }
+      updateEntry(id, newData);
+    } else if (choice == 4) {
+      updateIndex();
+    } else if (choice == 5) {
+      int id;
+
+      cout << "Enter ID of record: ";
+      cin >> id;
+      cin.ignore();
+
+      readById(id);
+    } else if (choice == 6) {
+      break;
     }
+  }
 
-    
-    return 0;
+  return 0;
 };
