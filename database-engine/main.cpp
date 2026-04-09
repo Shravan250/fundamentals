@@ -56,7 +56,6 @@ void loadIndexMap() {
 }
 
 void updateIndex() {
-  loadIndexMap();
   ofstream outFile(indexfile);
 
   if (outFile.is_open()) {
@@ -156,7 +155,7 @@ void readById(int id) {
   } else{
     cout << "Record Not Found!" << endl;
   }
-}
+};
 
 // TODO : update to use slot method to better integrate with indexing
 // currently using 'stale' method
@@ -185,34 +184,48 @@ void updateEntry(int targetId, string newData) {
   } else {
     cerr << "Error opening file for writing!" << endl;
   };
+};
 
+void cleanUpDatabase(){
 
-  // // write to the temp-file
-  // ofstream outFile(tempfile);
+    ofstream outFile(tempfile, ios::app | ios::binary);
+    ifstream inFile(database, ios::binary);
 
-  // if (outFile.is_open()) {
-  //   // creating json format
-  //   for (const auto &entry : entries) {
-  //     outFile << entry.dump() << "\n";
-  //   }
-  //   outFile.close();
-  // } else {
-  //   cerr << "Error opening temp-file for writing!" << endl;
-  // };
+    string line;
 
-  // cout << "SIMULATING CRASH NOW..." << endl;
-  // exit(0); // The program stops here
+   if (outFile.is_open()) {
+     
+    for (const auto& [id, pos] : indexmap) {
+        streampos startPos = outFile.tellp();
+
+        inFile.seekg(pos);
+        getline(inFile , line);
+
+        outFile << line << "\n";
+
+        indexmap[id] = startPos;
+
+     }
+
+      outFile.close();
+
+  } else {
+    cerr << "Error opening file for writing!" << endl;
+  };
+    
 
   // delete original database and make temp-file new original
-  // try {
-  //   fs::remove(database);
+  try {
+    fs::remove(database);
 
-  //   fs::rename(tempfile, database);
-  //   cout << "Update Complete!" << endl;
+    fs::rename(tempfile, database);
+    cout << "Update Complete!" << endl;
 
-  // } catch (const fs::filesystem_error &e) {
-  //   cout << "File error: " << e.what() << endl;
-  // }
+  } catch (const fs::filesystem_error &e) {
+    cout << "File error: " << e.what() << endl;
+  };
+
+  updateIndex();
 };
 
 int main() {
@@ -222,7 +235,7 @@ int main() {
 
   while (true) {
     cout << "\n1. Write to file\n2. Read from file\n3. Update entry\n4. Update "
-            "index\n5. Read by ID\n6. Exit\nChoice: ";
+            "index\n5. Read by ID\n6. Clean database\n7. Exit\nChoice: ";
     if (!(cin >> choice))
       break;
     cin.ignore();
@@ -259,6 +272,8 @@ int main() {
 
       readById(id);
     } else if (choice == 6) {
+      cleanUpDatabase();
+    } else if (choice == 7) {
       break;
     }
   }
