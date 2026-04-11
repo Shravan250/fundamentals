@@ -15,18 +15,22 @@ unordered_map<int, streampos> indexmap;
 
 int getLastId() {
   ifstream inFile(metadata);
-  int lastId;
+  int lastId = 0;
   string line;
 
   if (inFile.is_open()) {
     while (getline(inFile, line)) {
-      json j = json::parse(line);
-      lastId = j["id"];
+      try {
+        json j = json::parse(line);
+        lastId = j["id"];
+      } catch (const json::exception& e) {
+        cerr << "JSON parse error: " << e.what() << endl;
+      }
     }
+    inFile.close();
   } else {
     cerr << "Error opening file for reading!" << endl;
   };
-  inFile.close();
 
   return lastId;
 };
@@ -42,11 +46,22 @@ void loadIndexMap() {
 
       if (!getline(inFile, line))
         break;
+      if(line.empty()) continue;
 
-      json j = json::parse(line);
-      int actualId = j["id"];
+      try{
+        json j = json::parse(line);
+        if (!j.contains("id")) continue;
+
+        int actualId = j["id"];
         
-      indexmap[actualId] = pos;
+        if (j.contains("deleted") && j["deleted"] == true){
+            indexmap.erase(actualId);
+        }else{
+          indexmap[actualId] = pos;
+        }
+      } catch (const json::exception& e) {
+        cerr << "JSON parse error: " << e.what() << endl;
+      }
     }
     inFile.close();
   } else {
@@ -59,16 +74,20 @@ void updateIndex() {
   ofstream outFile(indexfile);
 
   if (outFile.is_open()) {
-    for (const auto &[id, pos] : indexmap) {
-      json entry = {
-          {"id", id},
-          {"startpos", static_cast<long long>(pos)},
-      };
-      outFile << entry.dump() << endl;
-    }
+    try {
+      for (const auto &[id, pos] : indexmap) {
+        json entry = {
+            {"id", id},
+            {"startpos", static_cast<long long>(pos)},
+        };
+        outFile << entry.dump() << endl;
+      }
 
-    cout << "Index updated!!" << endl;
-    outFile.close();
+      outFile.close();
+      cout << "Index updated!!" << endl;
+    } catch (const exception& e) {
+      cerr << "Error writing index: " << e.what() << endl;
+    }
   } else {
     cerr << "Error opening file for writing!" << endl;
   };
@@ -78,27 +97,41 @@ void appendIndex(int id, streampos pos) {
   ofstream outFile(indexfile, ios::app);
 
   if (outFile.is_open()) {
-    json entry = {
-        {"id", id},
-        {"startpos", static_cast<long long>(pos)},
-    };
-    outFile << entry.dump() << endl;
-    
-    indexmap[id] = pos;
+    try{
+      json entry = {
+          {"id", id},
+          {"startpos", static_cast<long long>(pos)},
+      };
+      outFile << entry.dump() << endl;
+      
+      indexmap[id] = pos;
 
-    cout << "Index updated!!" << endl;
-    outFile.close();
+      cout << "Index updated!!" << endl;
+      outFile.close();
+    } catch (const exception& e) {
+      cerr << "Error writing index: " << e.what() << endl;
+    }
   } else {
     cerr << "Error opening file for writing!" << endl;
   };
 }
 
 void writeFile(string data) {
+  if (data.empty()) {
+    cerr << "Error: data cannot be empty!" << endl;
+    return;
+  }
   int id = getLastId() + 1;
 
   ofstream metaFile(metadata);
   ofstream outFile(database, ios::app | ios::binary);
-  if (outFile.is_open() && metaFile.is_open()) {
+  
+  if (!outFile.is_open() || !metaFile.is_open()) {
+    cerr << "Error opening file for writing!" << endl;
+    return;
+  }
+
+  try{
 
     // get the eof pos before write
     streampos startPos = outFile.tellp();
@@ -121,9 +154,9 @@ void writeFile(string data) {
 
     metaFile.close();
     outFile.close();
-  } else {
-    cerr << "Error opening file for writing!" << endl;
-  };
+  } catch (const exception& e) {
+    cerr << "Error writing file: " << e.what() << endl;
+  }
 };
 
 void readFile() {
@@ -131,9 +164,20 @@ void readFile() {
   string line;
 
   if (inFile.is_open()) {
+    int count = 0;
     while (getline(inFile, line)) {
-      cout << line << endl;
+      try {
+        json j = json::parse(line);
+        if (!(j.contains("deleted") && j["deleted"] == true)) {
+          cout << "ID: " << j["id"] << " | Data: " << j["data"] 
+               << " | Timestamp: " << j["timestamp"] << endl;
+          count++;
+        }
+      } catch (const json::exception& e) {
+        cerr << "JSON parse error: " << e.what() << endl;
+      }
     }
+    cout << "Total records: " << count << endl;
     inFile.close();
   } else {
     cerr << "Database is empty or doesn't exist." << endl;
@@ -141,6 +185,11 @@ void readFile() {
 };
 
 void readById(int id) {
+  if (id <= 0) {
+    cout << "Invalid ID!" << endl;
+    return;
+  }
+
   auto it = indexmap.find(id);
   string line;
 
@@ -148,18 +197,38 @@ void readById(int id) {
     streampos address = it->second;
     ifstream inFile(database, ios::binary);
 
-    inFile.seekg(address);
-    getline(inFile, line);
+    if (!inFile.is_open()) {
+      cerr << "Error opening database file!" << endl;
+      return;
+    }
 
-    cout << "Found Record: " << line << endl;
+    inFile.seekg(address);
+
+    if (getline(inFile, line)) {
+      try {
+        json j = json::parse(line);
+        if (j.contains("deleted") && j["deleted"] == true) {
+          cout << "Record has been deleted!" << endl;
+        } else {
+          cout << "Found Record: " << line << endl;
+        }
+      } catch (const json::exception& e) {
+        cerr << "JSON parse error: " << e.what() << endl;
+      }
+    }
+    inFile.close();
   } else{
     cout << "Record Not Found!" << endl;
   }
 };
 
-// TODO : update to use slot method to better integrate with indexing
+// TODO : want to try to use slot method
 // currently using 'stale' method
 void updateEntry(int targetId, string newData) {
+  if (newData.empty()) {
+    cerr << "Error: new data cannot be empty!" << endl;
+    return;
+  }
     
     auto it = indexmap.find(targetId);
 
@@ -169,7 +238,12 @@ void updateEntry(int targetId, string newData) {
     }
 
   ofstream outFile(database, ios::app | ios::binary);
-  if (outFile.is_open()) {
+  if (!outFile.is_open()) {
+    cerr << "Error opening file for writing!" << endl;
+    return;
+  }
+
+  try {
 
     // get the eof pos before write
     streampos startPos = outFile.tellp();
@@ -179,11 +253,10 @@ void updateEntry(int targetId, string newData) {
 
     // appendIndex
     appendIndex(targetId, startPos);
-
     outFile.close();
-  } else {
-    cerr << "Error opening file for writing!" << endl;
-  };
+  } catch (const exception& e) {
+    cerr << "Error updating entry: " << e.what() << endl;
+  }
 };
 
 void cleanUpDatabase(){
@@ -193,40 +266,71 @@ void cleanUpDatabase(){
 
     string line;
 
-   if (outFile.is_open()) {
+  if (!outFile.is_open() || !inFile.is_open()) {
+    cerr << "Error opening files!" << endl;
+    return;
+  }
+
+  try {
      
     for (const auto& [id, pos] : indexmap) {
         streampos startPos = outFile.tellp();
 
         inFile.seekg(pos);
-        getline(inFile , line);
-
+      if (getline(inFile, line)) {
         outFile << line << "\n";
-
         indexmap[id] = startPos;
-
+      }
      }
 
-      outFile.close();
+    outFile.close();
+    inFile.close();
 
-  } else {
-    cerr << "Error opening file for writing!" << endl;
-  };
-    
 
-  // delete original database and make temp-file new original
-  try {
+    // delete original database and make temp-file new original
     fs::remove(database);
-
     fs::rename(tempfile, database);
     cout << "Update Complete!" << endl;
+    
+      updateIndex();
 
   } catch (const fs::filesystem_error &e) {
     cout << "File error: " << e.what() << endl;
-  };
+  } catch (const exception& e) {
+    cout << "Error: " << e.what() << endl;
+  }
+    
 
-  updateIndex();
 };
+
+void deleteById(int id){
+  if (id <= 0) {
+    cout << "Invalid ID!" << endl;
+    return;
+  }
+
+    auto it = indexmap.find(id);
+  if (it == indexmap.end()) {
+    cout << "Record not found!" << endl;
+    return;
+  }
+
+    ofstream outFile(database, ios::app);
+  if (!outFile.is_open()) {
+    cerr << "Error opening file for writing!" << endl;
+    return;
+  }
+
+  try {
+    json tombstone = {{"id", id}, {"deleted", true}};
+    outFile << tombstone.dump() << endl;
+    outFile.close();
+    indexmap.erase(it->first);
+    cout << "Record deleted successfully!" << endl;
+  } catch (const exception& e) {
+    cerr << "Error deleting record: " << e.what() << endl;
+  }
+}
 
 int main() {
 
@@ -235,7 +339,7 @@ int main() {
 
   while (true) {
     cout << "\n1. Write to file\n2. Read from file\n3. Update entry\n4. Update "
-            "index\n5. Read by ID\n6. Clean database\n7. Exit\nChoice: ";
+            "index\n5. Read by ID\n6. Delete by Id\n7. Clean database\n8. Exit\nChoice: ";
     if (!(cin >> choice))
       break;
     cin.ignore();
@@ -272,8 +376,16 @@ int main() {
 
       readById(id);
     } else if (choice == 6) {
-      cleanUpDatabase();
+      int id;
+
+      cout << "Enter ID of record: ";
+      cin >> id;
+      cin.ignore();
+
+      deleteById(id);
     } else if (choice == 7) {
+      cleanUpDatabase();
+    } else if (choice == 8) {
       break;
     }
   }
