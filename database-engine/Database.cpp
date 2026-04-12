@@ -1,4 +1,6 @@
 #include "Database.hpp"
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <ctime>
 
@@ -10,6 +12,7 @@ LocalDB::LocalDB(string name) {
     dbFile = dbDir + "/" + name + ".txt";
     metaFile = dbDir + "/" + name + "_metadata.txt";
     idxFile = dbDir + "/" + name + "_index.txt";
+    schemaFile = dbDir + "/" + name + "_schema.txt";
 
     if (!fs::exists(dbDir)) {
         fs::create_directories(dbDir);
@@ -22,6 +25,11 @@ LocalDB::LocalDB(string name) {
     
     if (!fs::exists(metaFile)) {
         ofstream create(metaFile);
+        create.close();
+    }
+
+    if (!fs::exists(schemaFile)) {
+        ofstream create(schemaFile);
         create.close();
     }
   // create index mao on system load
@@ -113,7 +121,54 @@ void LocalDB::appendIndex(int id, streampos pos) {
   };
 }
 
-void LocalDB::write(string data) {
+bool LocalDB::hasSchema(){
+    return fs::exists(schemaFile) && fs::file_size(schemaFile) > 0;
+}
+
+void LocalDB::setSchema(const vector<string>& keys){
+    ofstream outFile(schemaFile);
+
+    if(outFile.is_open()){
+        json schema = json::object();
+
+        for(const auto& key : keys){
+            schema[key] = "";
+        }
+
+        outFile << schema.dump() << endl;
+        outFile.close();
+    }else{
+        cerr << "Error opening schema file for writing!" << endl;
+    }
+};
+
+vector<string> LocalDB::getSchema(){
+    ifstream inFile(schemaFile);
+    vector<string> keys;
+    string line;
+
+    if (inFile.is_open() && getline(inFile, line)) {
+      try {
+        json j = json::parse(line);
+        
+        if(j.is_object()){
+            for(auto& it : j.items()){
+                keys.push_back(it.key());
+            }
+        }
+
+        inFile.close();
+      } catch (const json::exception & e) {
+        cerr << "JSON parse error: " << e.what() << endl;
+      }
+    } else {
+    cerr << "Error opening schema file for reading!" << endl;
+  };
+
+    return keys;
+};
+
+void LocalDB::write(json data) {
   if (data.empty()) {
     cerr << "Error: data cannot be empty!" << endl;
     return;
@@ -133,30 +188,11 @@ void LocalDB::write(string data) {
     // get the eof pos before write
     streampos startPos = outFile.tellp();
 
-    json entry = {
-      {
-        "id",
-        id
-      },
-      {
-        "data",
-        data
-      },
-      {
-        "timestamp",
-        time(0)
-      }
-    };
-    outFile << entry.dump() << endl;
+    data["id"] = id;
+    outFile << data.dump() << endl;
 
     // update metaFile
-    json meta = {
-      {
-        "id",
-        id
-      },
-    };
-    inFile << meta.dump() << endl;
+    inFile << json({{"id", id}}).dump() << endl;
 
     // appendIndex
     appendIndex(id, startPos);
@@ -174,23 +210,34 @@ void LocalDB::readAll() {
 
   if (inFile.is_open()) {
     int count = 0;
+    vector<string> keys = getSchema();
+
     while (getline(inFile, line)) {
       try {
         json j = json::parse(line);
+
         if (!(j.contains("deleted") && j["deleted"] == true)) {
-          cout << "ID: " << j["id"] << " | Data: " << j["data"] <<
-            " | Timestamp: " << j["timestamp"] << endl;
+          cout << "ID: " << j["id"];
+
+          for (const auto& key : keys) {
+            if (j.contains(key)) {
+              cout << " | " << key << ": " << j[key];
+            }
+          }
+
+          cout << endl;
           count++;
         }
       } catch (const json::exception & e) {
         cerr << "JSON parse error: " << e.what() << endl;
       }
     }
+
     cout << "Total records: " << count << endl;
     inFile.close();
   } else {
     cerr << "Database is empty or doesn't exist." << endl;
-  };
+  }
 }
 
 void LocalDB::readById(int id) {
@@ -233,7 +280,7 @@ void LocalDB::readById(int id) {
 
 // TODO : want to try to use slot method
 // currently using 'stale' method
-void LocalDB::update(int targetId, string newData) {
+void LocalDB::update(int targetId, json newData) {
   if (newData.empty()) {
     cerr << "Error: new data cannot be empty!" << endl;
     return;
@@ -257,21 +304,9 @@ void LocalDB::update(int targetId, string newData) {
     // get the eof pos before write
     streampos startPos = outFile.tellp();
 
-    json entry = {
-      {
-        "id",
-        targetId
-      },
-      {
-        "data",
-        newData
-      },
-      {
-        "timestamp",
-        time(0)
-      }
-    };
-    outFile << entry.dump() << endl;
+    newData["id"] = targetId;
+    
+    outFile << newData.dump() << endl;
 
     // appendIndex
     appendIndex(targetId, startPos);

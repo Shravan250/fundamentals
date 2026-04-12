@@ -17,6 +17,7 @@ private:
     string dbFile;
     string metaFile;
     string idxFile;
+    string schemaFile;
     unordered_map<int, streampos> indexmap;
 
     // Internal helper methods
@@ -29,12 +30,16 @@ public:
     // Constructor handles initialization
     LocalDB(string name);
 
-    void write(string data);
+    void write(json data);
     void readAll();
     void readById(int id);
-    void update(int id, string newData);
+    void update(int id, json newData);
     void deleteById(int id);
     void compact(); // cleanUpDatabase logic
+
+    bool hasSchema();
+    void setSchema(const vector<string>& keys);
+    vector<string> getSchema();
 };
 
 
