@@ -70,6 +70,7 @@ void LocalDB::loadIndexMap() {
   };
 }
 
+// BUG : creating race conditoin in multiple write need to create local variable
 int LocalDB::getLastId() {
   ifstream inFile(metaFile);
   int lastId = 0;
@@ -422,4 +423,8 @@ void LocalDB::compact() {
   } catch (const exception & e) {
     cout << "Error: " << e.what() << endl;
   };
+}
+
+vector<json> query(string key, string value){
+    
 }

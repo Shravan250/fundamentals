@@ -9,7 +9,7 @@
 using namespace std;
 
 namespace fs = filesystem;
-using json = nlohmann::json;
+using json = nlohmann::ordered_json;
 
 class LocalDB {
 private:
@@ -40,6 +40,7 @@ public:
     bool hasSchema();
     void setSchema(const vector<string>& keys);
     vector<string> getSchema();
+    vector<json> query(string key, string value);
 };
 
 
